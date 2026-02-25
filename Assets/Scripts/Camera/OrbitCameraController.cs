@@ -1,6 +1,7 @@
 // Assets/Scripts/Camera/OrbitCameraController.cs
 // 스크린 메시를 중심으로 궤도 회전하는 카메라 컨트롤러.
 // 마우스 우클릭 드래그로 회전, 스크롤로 줌, 1~4키로 프리셋 전환.
+// 야외 자연환경에 최적화된 프리셋과 거리 범위를 제공한다.
 //
 // Phase 5 확장: 자동 순항 모드, 시네마틱 스플라인 경로, 전환 애니메이션
 
@@ -17,13 +18,13 @@ public class OrbitCameraController : MonoBehaviour
     public Transform target;
 
     [Tooltip("초기 궤도 거리")]
-    public float distance = 10f;
+    public float distance = 12f;
 
     [Tooltip("최소 줌 거리")]
     public float minDistance = 3f;
 
     [Tooltip("최대 줌 거리")]
-    public float maxDistance = 25f;
+    public float maxDistance = 35f;
 
     [Tooltip("마우스 회전 감도")]
     public float rotationSpeed = 5f;
@@ -40,22 +41,22 @@ public class OrbitCameraController : MonoBehaviour
 
     [Header("Angle Limits")]
     [Tooltip("수직 최소 각도 (아래쪽)")]
-    public float minVerticalAngle = -10f;
+    public float minVerticalAngle = -5f;
 
     [Tooltip("수직 최대 각도 (위쪽)")]
-    public float maxVerticalAngle = 60f;
+    public float maxVerticalAngle = 70f;
 
     // ═══════════════════════════════════════════════════
-    // 프리셋 카메라 위치
+    // 프리셋 카메라 위치 (야외 자연환경 최적화)
     // ═══════════════════════════════════════════════════
 
     [Header("Presets")]
     public CameraPreset[] presets = new CameraPreset[]
     {
-        new CameraPreset("정면",       0f,   5f,  10f),
-        new CameraPreset("좌측 45도", -45f,  15f,  9f),
-        new CameraPreset("우측 상단",  30f,  35f, 12f),
-        new CameraPreset("클로즈업",   10f,  10f,  5f)
+        new CameraPreset("파노라마",     0f,  12f, 14f),
+        new CameraPreset("측면뷰",     -50f,  10f, 11f),
+        new CameraPreset("상공뷰",      15f,  45f, 18f),
+        new CameraPreset("클로즈업",     5f,   8f,  6f)
     };
 
     [System.Serializable]
@@ -80,11 +81,11 @@ public class OrbitCameraController : MonoBehaviour
     // ═══════════════════════════════════════════════════
 
     private float currentHAngle;
-    private float currentVAngle = 15f;
+    private float currentVAngle = 12f;
     private float currentDist;
 
     private float targetHAngle;
-    private float targetVAngle = 15f;
+    private float targetVAngle = 12f;
     private float targetDist;
 
     /// <summary>현재 활성 프리셋 인덱스 (-1이면 수동 조작 중)</summary>

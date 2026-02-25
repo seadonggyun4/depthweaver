@@ -1,7 +1,7 @@
 // Assets/Editor/StudioSceneSetupWizard.cs
 // 메뉴: UIShader > Build Studio Scene
-// 원클릭으로 전체 스튜디오 씬을 자동 구성한다.
-// 스크린 메시, 영역광, 환경, 카메라, 매니저를 모두 생성하고 연결한다.
+// 원클릭으로 전체 자연환경 스튜디오 씬을 자동 구성한다.
+// 스크린 메시, 영역광, 자연환경, 카메라, 매니저를 모두 생성하고 연결한다.
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -27,37 +27,33 @@ public static class StudioSceneSetupWizard
         CleanupExistingObjects();
 
         // ═══════════════════════════════════════════════
-        // 1. 환경 생성
+        // 1. 자연환경 생성
         // ═══════════════════════════════════════════════
 
         GameObject environmentRoot = new GameObject("--- Environment ---");
 
-        // StudioSceneBuilder를 임시로 생성하여 환경 구축
-        GameObject builderObj = new GameObject("_TempBuilder");
-        StudioSceneBuilder builder = builderObj.AddComponent<StudioSceneBuilder>();
+        NaturalEnvironmentBuilder envBuilder = new NaturalEnvironmentBuilder();
+        GameObject[] envObjects = envBuilder.BuildEnvironment(config);
 
-        // config 필드를 SerializedObject로 할당
-        SerializedObject builderSO = new SerializedObject(builder);
-        builderSO.FindProperty("config").objectReferenceValue = config;
-        builderSO.ApplyModifiedPropertiesWithoutUndo();
+        // 생성된 환경 오브젝트를 Environment 루트 아래로 이동
+        foreach (GameObject obj in envObjects)
+        {
+            if (obj != null)
+            {
+                obj.transform.parent = environmentRoot.transform;
+            }
+        }
 
-        // 환경 요소 생성
-        builder.BuildFullStudio();
-
-        // 생성된 오브젝트를 Environment 루트 아래로 이동
-        MoveToParent("StudioFloor", environmentRoot);
-        MoveToParent("StudioBackdrop", environmentRoot);
-        MoveToParent("AmbientLight", environmentRoot);
-
-        // 테스트 오브젝트 그룹
+        // 테스트 오브젝트 (바위/돌 형태)
         GameObject testRoot = new GameObject("--- Test Objects ---");
-        MoveToParent("TestSphere", testRoot);
-        MoveToParent("TestCube", testRoot);
-        MoveToParent("TestCylinder", testRoot);
-        MoveToParent("TestFlatCube", testRoot);
-
-        // 임시 빌더 제거
-        Object.DestroyImmediate(builderObj);
+        GameObject[] testObjects = envBuilder.BuildTestObjects(config);
+        foreach (GameObject obj in testObjects)
+        {
+            if (obj != null)
+            {
+                obj.transform.parent = testRoot.transform;
+            }
+        }
 
         // ═══════════════════════════════════════════════
         // 2. 스크린 생성
@@ -182,8 +178,13 @@ public static class StudioSceneSetupWizard
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
 
         Debug.Log("[UIShader] ═══════════════════════════════════════════");
-        Debug.Log("[UIShader] 스튜디오 씬 빌드 완료!");
+        Debug.Log("[UIShader] 자연환경 스튜디오 씬 빌드 완료!");
         Debug.Log("[UIShader] ═══════════════════════════════════════════");
+        Debug.Log("[UIShader] 생성된 환경 모듈:");
+        foreach (IEnvironmentModule module in envBuilder.GetModules())
+        {
+            Debug.Log($"  - {module.ModuleName}");
+        }
         Debug.Log("[UIShader] 다음 단계:");
         Debug.Log("  1. StaticTextureSource에 테스트 텍스처를 할당하세요");
         Debug.Log("     - testColorTexture: 512x512 웹페이지 스크린샷 (sRGB)");
@@ -242,10 +243,17 @@ public static class StudioSceneSetupWizard
             }
         }
 
-        // 개별 이름으로도 정리
+        // 개별 이름으로도 정리 (환경 모듈 오브젝트 포함)
         string[] individualNames = {
+            // 자연환경 오브젝트
+            "Terrain", "SkyVolume", "SunLight",
+            "GrassRenderer", "AtmosphereVolume", "WindZone",
+            // 테스트 오브젝트
+            "TestRock_Large", "TestRock_Small", "TestPillar", "TestFlatRock",
+            // 레거시 스튜디오 오브젝트 (이전 빌드 호환)
             "StudioFloor", "StudioBackdrop", "AmbientLight",
             "TestSphere", "TestCube", "TestCylinder", "TestFlatCube",
+            // 스크린 및 매니저
             "ScreenMesh", "ScreenAreaLight",
             "PipelineManager", "Bootstrap"
         };
@@ -257,15 +265,6 @@ public static class StudioSceneSetupWizard
             {
                 Object.DestroyImmediate(obj);
             }
-        }
-    }
-
-    private static void MoveToParent(string childName, GameObject parent)
-    {
-        GameObject child = GameObject.Find(childName);
-        if (child != null)
-        {
-            child.transform.parent = parent.transform;
         }
     }
 }
