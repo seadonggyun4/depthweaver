@@ -1,11 +1,18 @@
 // Assets/Scripts/Core/TexturePipelineManager.cs
-// 텍스처 파이프라인 오케스트레이터.
+// ══════════════════════════════════════════════════════════════════════
+// Depthweaver — 텍스처 파이프라인 오케스트레이터
+// ══════════════════════════════════════════════════════════════════════
+//
 // ITextureSource로부터 텍스처 갱신 이벤트를 수신하여
-// 스크린 메시 머티리얼과 영역광 쿠키에 분배한다.
+// 스크린 메시 머티리얼, 영역광 쿠키, 사분면 광원에 분배한다.
 //
 // 핵심 설계: 이 클래스는 텍스처 소스의 구체적 구현을 알지 못한다.
 // Phase 0의 StaticTextureSource든 Phase 1의 CEFTextureSource든
 // ITextureSource 인터페이스만 참조하므로, 소스 교체 시 이 코드는 변경되지 않는다.
+//
+// Phase 4 확장:
+//   - QuadrantLightSystem 연동 (사분면 광원 모드 전환)
+//   - 메인/사분면 광원 자동 전환 오케스트레이션
 
 using System;
 using UnityEngine;
@@ -26,6 +33,9 @@ public class TexturePipelineManager : MonoBehaviour
     [Tooltip("영역광 컨트롤러 (쿠키 텍스처 갱신)")]
     [SerializeField] private ScreenLightController screenLight;
 
+    [Tooltip("사분면 다중 광원 시스템 (선택적, config에서 활성/비활성)")]
+    [SerializeField] private QuadrantLightSystem quadrantLightSystem;
+
     [Header("Texture Source")]
     [Tooltip("ITextureSource를 구현하는 MonoBehaviour를 할당.\n" +
              "Phase 0: StaticTextureSource\n" +
@@ -45,11 +55,15 @@ public class TexturePipelineManager : MonoBehaviour
     private static readonly int DepthTexId = Shader.PropertyToID("_DepthTex");
     private static readonly int DisplacementScaleId = Shader.PropertyToID("_DisplacementScale");
     private static readonly int DisplacementBiasId = Shader.PropertyToID("_DisplacementBias");
+    private static readonly int EdgeFalloffId = Shader.PropertyToID("_EdgeFalloff");
     private static readonly int EmissionIntensityId = Shader.PropertyToID("_EmissionIntensity");
 
     // 성능 측정
     private int colorUpdateCount;
     private int depthUpdateCount;
+
+    // 광원 모드 추적
+    private bool lastQuadrantMode;
 
     /// <summary>마지막 1초간 색상 텍스처 갱신 횟수</summary>
     public int ColorUpdatesPerSecond { get; private set; }
@@ -76,12 +90,19 @@ public class TexturePipelineManager : MonoBehaviour
 
     void Update()
     {
-        // displacementScale/bias의 실시간 변경을 반영
-        if (isActive && config != null && screenMaterial != null)
+        if (!isActive || config == null) return;
+
+        // 변위 파라미터의 실시간 변경을 반영
+        if (screenMaterial != null)
         {
             screenMaterial.SetFloat(DisplacementScaleId, config.displacementScale);
             screenMaterial.SetFloat(DisplacementBiasId, config.displacementBias);
+            screenMaterial.SetFloat(EdgeFalloffId, config.edgeFalloff);
+            screenMaterial.SetFloat(EmissionIntensityId, config.emissionIntensity);
         }
+
+        // ─── 광원 모드 오케스트레이션 ───
+        UpdateLightMode();
     }
 
     void OnDestroy()
@@ -103,6 +124,10 @@ public class TexturePipelineManager : MonoBehaviour
 
         if (screenLight == null)
             Debug.LogError("[UIShader] TexturePipelineManager: ScreenLightController가 할당되지 않았습니다.");
+
+        // QuadrantLightSystem은 선택적 (null 허용)
+        if (quadrantLightSystem == null)
+            Debug.Log("[UIShader] TexturePipelineManager: QuadrantLightSystem 미할당 (단일 광원 모드)");
 
         if (textureSourceComponent == null)
         {
@@ -138,6 +163,8 @@ public class TexturePipelineManager : MonoBehaviour
         // 초기 셰이더 파라미터 설정
         screenMaterial.SetFloat(DisplacementScaleId, config.displacementScale);
         screenMaterial.SetFloat(DisplacementBiasId, config.displacementBias);
+        screenMaterial.SetFloat(EdgeFalloffId, config.edgeFalloff);
+        screenMaterial.SetFloat(EmissionIntensityId, config.emissionIntensity);
 
         // 텍스처 소스 연결
         ConnectTextureSource(textureSource);
@@ -201,8 +228,20 @@ public class TexturePipelineManager : MonoBehaviour
         // ─── 색상 텍스처 → 스크린 메시 알베도 + 영역광 쿠키 ───
         if (args.ColorTexture != null)
         {
+            // 스크린 메시에 색상 텍스처 적용
             screenMaterial.SetTexture(MainTexId, args.ColorTexture);
+
+            // GPU 쿠키 후처리 + 메인 쿠키 갱신
             screenLight.UpdateCookie(args.ColorTexture);
+
+            // 사분면 광원 모드: 후처리된 쿠키를 크롭하여 분배
+            if (quadrantLightSystem != null && quadrantLightSystem.IsEnabled)
+            {
+                RenderTexture processedCookie = screenLight.ProcessedCookieTexture;
+                if (processedCookie != null)
+                    quadrantLightSystem.UpdateQuadrantCookies(processedCookie);
+            }
+
             colorUpdateCount++;
         }
 
@@ -211,6 +250,36 @@ public class TexturePipelineManager : MonoBehaviour
         {
             screenMaterial.SetTexture(DepthTexId, args.DepthTexture);
             depthUpdateCount++;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // 광원 모드 오케스트레이션
+    // ═══════════════════════════════════════════════════
+
+    /// <summary>
+    /// 메인 광원 ↔ 사분면 광원 모드 전환을 관리한다.
+    /// 이중 조명을 방지하고, 자동 노출 강도를 사분면 광원에 동기화한다.
+    /// </summary>
+    private void UpdateLightMode()
+    {
+        if (quadrantLightSystem == null) return;
+
+        bool quadrantMode = config.enableQuadrantLights && quadrantLightSystem.IsEnabled;
+
+        // 모드 전환 감지
+        if (quadrantMode != lastQuadrantMode)
+        {
+            screenLight.SetMainLightActive(!quadrantMode);
+            lastQuadrantMode = quadrantMode;
+
+            Debug.Log($"[UIShader] 광원 모드 전환: {(quadrantMode ? "사분면 (4광원)" : "단일 (메인)")}");
+        }
+
+        // 사분면 모드: 자동 노출 강도 동기화
+        if (quadrantMode)
+        {
+            quadrantLightSystem.SyncIntensity(screenLight.CurrentIntensity);
         }
     }
 

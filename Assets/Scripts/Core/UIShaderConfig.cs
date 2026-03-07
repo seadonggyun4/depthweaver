@@ -40,6 +40,14 @@ public class UIShaderConfig : ScriptableObject
     [Range(-1f, 1f)]
     public float displacementBias = 0f;
 
+    [Tooltip("경계 감쇠 범위 (메시 가장자리에서 변위를 부드럽게 줄임)")]
+    [Range(0f, 0.2f)]
+    public float edgeFalloff = 0.05f;
+
+    [Tooltip("스크린 자체 발광 강도")]
+    [Range(0f, 5f)]
+    public float emissionIntensity = 0.3f;
+
     [Tooltip("깊이 맵 가우시안 블러 반복 횟수")]
     [Range(0, 10)]
     public int depthBlurIterations = 1;
@@ -56,6 +64,10 @@ public class UIShaderConfig : ScriptableObject
     [Tooltip("RectAreaLight 기본 강도 (루멘)")]
     public float lightIntensity = 5000f;
 
+    [Tooltip("영역광 도달 범위 (미터)")]
+    [Range(5f, 50f)]
+    public float lightRange = 30f;
+
     [Tooltip("쿠키 밝기 승수")]
     [Range(0.1f, 10f)]
     public float cookieIntensityMultiplier = 1f;
@@ -66,6 +78,38 @@ public class UIShaderConfig : ScriptableObject
 
     [Tooltip("비선형 밝기 매핑 커브")]
     public AnimationCurve cookieContrastCurve = AnimationCurve.Linear(0, 0, 1, 1);
+
+    // ═══════════════════════════════════════════════════
+    // 자동 노출
+    // ═══════════════════════════════════════════════════
+
+    [Header("Auto Exposure")]
+    [Tooltip("자동 노출 활성화: 페이지 밝기에 따라 광원 강도를 자동 조절")]
+    public bool autoExposureEnabled = true;
+
+    [Tooltip("밝은 페이지의 강도 승수 (최소, 과포화 방지)")]
+    [Range(0.3f, 1.5f)]
+    public float autoExposureMinMultiplier = 0.6f;
+
+    [Tooltip("어두운 페이지의 강도 승수 (최대, 가시성 확보)")]
+    [Range(0.5f, 3f)]
+    public float autoExposureMaxMultiplier = 1.5f;
+
+    [Tooltip("자동 노출 보간 속도 (높을수록 빠른 반응)")]
+    [Range(0.5f, 10f)]
+    public float autoExposureSmoothSpeed = 3f;
+
+    // ═══════════════════════════════════════════════════
+    // 사분면 다중 광원
+    // ═══════════════════════════════════════════════════
+
+    [Header("Quadrant Lights")]
+    [Tooltip("2×2 사분면 다중 광원 활성화 (공간적 정확도 향상, 성능 비용 증가)")]
+    public bool enableQuadrantLights = false;
+
+    [Tooltip("사분면 광원 간 간격 (월드 유닛)")]
+    [Range(0f, 0.2f)]
+    public float quadrantLightSpacing = 0.05f;
 
     // ═══════════════════════════════════════════════════
     // CEF 설정 (Phase 1+)
@@ -201,6 +245,20 @@ public class UIShaderConfig : ScriptableObject
     public bool enableSSAO = true;
 
     // ═══════════════════════════════════════════════════
+    // 부트스트랩 설정 (Phase 6)
+    // ═══════════════════════════════════════════════════
+
+    [Header("Bootstrap (Phase 6)")]
+    [Tooltip("시작 시 자동 데모 모드")]
+    public bool autoStartDemo = true;
+
+    [Tooltip("시작 시 자동 순항 모드")]
+    public bool autoStartCruise = true;
+
+    [Tooltip("시작 시 UI 오버레이 표시")]
+    public bool showUIOnStart = true;
+
+    // ═══════════════════════════════════════════════════
     // 유틸리티
     // ═══════════════════════════════════════════════════
 
@@ -216,6 +274,10 @@ public class UIShaderConfig : ScriptableObject
         screenWorldSize = Mathf.Max(0.1f, screenWorldSize);
         screenSegments = Mathf.Clamp(screenSegments, 1, 1023);
         lightIntensity = Mathf.Max(0f, lightIntensity);
+        lightRange = Mathf.Max(1f, lightRange);
+        autoExposureMinMultiplier = Mathf.Max(0.1f, autoExposureMinMultiplier);
+        autoExposureMaxMultiplier = Mathf.Max(autoExposureMinMultiplier, autoExposureMaxMultiplier);
+        autoExposureSmoothSpeed = Mathf.Max(0.1f, autoExposureSmoothSpeed);
         cefFrameRate = Mathf.Clamp(cefFrameRate, 1, 120);
         targetFrameRate = Mathf.Clamp(targetFrameRate, 30, 240);
         terrainSize = Mathf.Max(10f, terrainSize);
