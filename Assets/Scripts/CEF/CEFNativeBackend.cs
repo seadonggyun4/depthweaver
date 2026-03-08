@@ -55,6 +55,17 @@ public class CEFNativeBackend : IBrowserBackend
     /// <summary>마지막 프레임 전송 소요 시간 (밀리초)</summary>
     public float LastFrameTransferTimeMs { get; private set; }
 
+    // Phase 2: 깊이 데이터 폴링
+    private byte[] depthPixelBuffer;
+    private System.Runtime.InteropServices.GCHandle depthBufferHandle;
+    private bool depthBufferAllocated;
+
+    /// <summary>새로운 깊이 프레임 존재 여부 (Phase 2)</summary>
+    public bool HasNewDepthFrame => IsInitialized && NativePluginInterop.CEF_HasNewDepthFrame();
+
+    /// <summary>깊이 프레임 수신 횟수 (Phase 2 진단)</summary>
+    public int DepthFrameCount => IsInitialized ? NativePluginInterop.CEF_GetDepthFrameCount() : 0;
+
     // ═══════════════════════════════════════════════════
     // 생명주기
     // ═══════════════════════════════════════════════════
@@ -69,6 +80,10 @@ public class CEFNativeBackend : IBrowserBackend
 
         RenderWidth = width;
         RenderHeight = height;
+
+        // 이전 Play 세션에서 네이티브 플러그인이 여전히 활성 상태일 수 있음
+        // → 먼저 Shutdown 호출하여 정리
+        NativePluginInterop.CEF_Shutdown();
 
         int result = NativePluginInterop.CEF_Initialize(width, height, frameRate);
         if (result != 0)
@@ -92,8 +107,19 @@ public class CEFNativeBackend : IBrowserBackend
         IsInitialized = false;
         pendingJSCallbacks.Clear();
 
+        // Phase 2: 깊이 버퍼 GC 핸들 해제
+        if (depthBufferAllocated && depthBufferHandle.IsAllocated)
+        {
+            depthBufferHandle.Free();
+            depthBufferAllocated = false;
+        }
+
         Debug.Log("[UIShader] CEFNativeBackend 종료 완료");
     }
+
+    private float lastDiagTime;
+    private int[] diagBuffer = new int[4];
+    private byte[] nativeLogBuffer = new byte[8192];
 
     public void Tick()
     {
@@ -102,11 +128,35 @@ public class CEFNativeBackend : IBrowserBackend
         // CEF 메시지 루프 진행
         NativePluginInterop.CEF_DoMessageLoopWork();
 
+        // 네이티브 C++ 로그를 Unity Console로 전달
+        PollNativeLogs();
+
         // 로드 상태 변화 감지 (네이티브 콜백 대신 폴링)
         PollLoadState();
 
         // 대기 중인 JS 결과 폴링
         PollJSResults();
+
+        // 진단 로그 (2초마다)
+        if (UnityEngine.Time.realtimeSinceStartup - lastDiagTime > 2f)
+        {
+            lastDiagTime = UnityEngine.Time.realtimeSinceStartup;
+            try
+            {
+                NativePluginInterop.CEF_GetDiagnostics(diagBuffer, 4);
+                UnityEngine.Debug.Log($"[CEF Diag] paint={diagBuffer[0]} viewRect={diagBuffer[1]} " +
+                                      $"browser={diagBuffer[2]} cefCore={diagBuffer[3]} " +
+                                      $"hasFrame={HasNewFrame()} isLoaded={NativePluginInterop.CEF_IsLoaded()}");
+            }
+            catch (EntryPointNotFoundException)
+            {
+                bool hasFrame = NativePluginInterop.CEF_HasNewFrame();
+                bool isLoaded = NativePluginInterop.CEF_IsLoaded();
+                bool isInit = NativePluginInterop.CEF_IsInitialized();
+                string url = GetCurrentURLInternal();
+                UnityEngine.Debug.Log($"[CEF Diag] init={isInit} loaded={isLoaded} hasFrame={hasFrame} url={url}");
+            }
+        }
     }
 
     // ═══════════════════════════════════════════════════
@@ -244,6 +294,41 @@ public class CEFNativeBackend : IBrowserBackend
     }
 
     // ═══════════════════════════════════════════════════
+    // Phase 2: 깊이 프레임 획득
+    // ═══════════════════════════════════════════════════
+
+    /// <summary>
+    /// 깊이 픽셀 데이터를 GC-고정 버퍼로 복사한다.
+    /// R-channel only, size×size 바이트.
+    /// </summary>
+    public bool CopyDepthPixels(out byte[] data, out int size)
+    {
+        data = null;
+        size = 0;
+
+        if (!IsInitialized) return false;
+
+        // 깊이 버퍼 지연 할당 (최대 4096×4096)
+        if (!depthBufferAllocated)
+        {
+            int maxSize = RenderWidth * RenderHeight;
+            depthPixelBuffer = new byte[maxSize];
+            depthBufferHandle = System.Runtime.InteropServices.GCHandle.Alloc(
+                depthPixelBuffer, System.Runtime.InteropServices.GCHandleType.Pinned);
+            depthBufferAllocated = true;
+        }
+
+        if (NativePluginInterop.CEF_GetDepthPixels(
+                depthBufferHandle.AddrOfPinnedObject(), out size))
+        {
+            data = depthPixelBuffer;
+            return true;
+        }
+
+        return false;
+    }
+
+    // ═══════════════════════════════════════════════════
     // 리사이즈
     // ═══════════════════════════════════════════════════
 
@@ -281,6 +366,36 @@ public class CEFNativeBackend : IBrowserBackend
         if (len <= 0) return string.Empty;
 
         return Encoding.UTF8.GetString(urlBuffer, 0, len);
+    }
+
+    /// <summary>
+    /// 네이티브 C++ 플러그인의 로그 메시지를 폴링하여 Unity Console에 출력한다.
+    /// fprintf(stderr)는 macOS에서 Unity Console에 나타나지 않으므로 이 방식을 사용한다.
+    /// </summary>
+    private void PollNativeLogs()
+    {
+        try
+        {
+            int len = NativePluginInterop.CEF_GetLogMessages(nativeLogBuffer, nativeLogBuffer.Length);
+            if (len > 0)
+            {
+                string logs = Encoding.UTF8.GetString(nativeLogBuffer, 0, len);
+                // 각 줄을 개별 로그로 출력
+                string[] lines = logs.Split('\n');
+                foreach (string line in lines)
+                {
+                    string trimmed = line.Trim();
+                    if (!string.IsNullOrEmpty(trimmed))
+                    {
+                        UnityEngine.Debug.Log($"[CEF Native] {trimmed}");
+                    }
+                }
+            }
+        }
+        catch (EntryPointNotFoundException)
+        {
+            // Unity 재시작 전까지 새 엔트리포인트 사용 불가 — 무시
+        }
     }
 
     /// <summary>

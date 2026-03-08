@@ -121,7 +121,7 @@ public static class BuildHelper
             CopyCEFBinaries(target, outputPath);
 
             // 빌드 크기 보고
-            long sizeMB = summary.totalSize / (1024 * 1024);
+            ulong sizeMB = summary.totalSize / (1024 * 1024);
             Debug.Log($"[UIShader Build] {platformName} 빌드 성공: {outputPath} ({sizeMB} MB, {summary.totalTime:F1}s)");
         }
         else

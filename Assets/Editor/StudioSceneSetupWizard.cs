@@ -44,17 +44,6 @@ public static class StudioSceneSetupWizard
             }
         }
 
-        // 테스트 오브젝트 (바위/돌 형태)
-        GameObject testRoot = new GameObject("--- Test Objects ---");
-        GameObject[] testObjects = envBuilder.BuildTestObjects(config);
-        foreach (GameObject obj in testObjects)
-        {
-            if (obj != null)
-            {
-                obj.transform.parent = testRoot.transform;
-            }
-        }
-
         // ═══════════════════════════════════════════════
         // 2. 스크린 생성
         // ═══════════════════════════════════════════════
@@ -102,7 +91,7 @@ public static class StudioSceneSetupWizard
         lightObj.transform.parent = screenRoot.transform;
 
         Light light = lightObj.AddComponent<Light>();
-        light.type = LightType.Area;
+        light.type = LightType.Rectangle;
 
         ScreenLightController lightCtrl = lightObj.AddComponent<ScreenLightController>();
         SerializedObject lightSO = new SerializedObject(lightCtrl);
@@ -111,6 +100,7 @@ public static class StudioSceneSetupWizard
 
         // ═══════════════════════════════════════════════
         // 3. 카메라 설정
+        // (번호 유지: 환경→스크린→카메라→매니저)
         // ═══════════════════════════════════════════════
 
         GameObject cameraRoot = new GameObject("--- Camera ---");
@@ -229,7 +219,6 @@ public static class StudioSceneSetupWizard
         string[] rootNames = {
             "--- Environment ---",
             "--- Screen ---",
-            "--- Test Objects ---",
             "--- Camera ---",
             "--- Managers ---"
         };
@@ -245,11 +234,17 @@ public static class StudioSceneSetupWizard
 
         // 개별 이름으로도 정리 (환경 모듈 오브젝트 포함)
         string[] individualNames = {
+            // HDRP 템플릿 기본 오브젝트 (충돌 방지)
+            "Sun", "Directional Light", "Sky and Fog Volume",
             // 자연환경 오브젝트
             "Terrain", "SkyVolume", "SunLight",
             "GrassRenderer", "AtmosphereVolume", "WindZone",
-            // 테스트 오브젝트
+            // 테스트 바위 오브젝트
             "TestRock_Large", "TestRock_Small", "TestPillar", "TestFlatRock",
+            // 캐릭터 (이전 빌드 잔여물 정리)
+            "--- Character ---",
+            "Char_Head", "Char_Torso", "Char_LeftArm", "Char_RightArm",
+            "Char_LeftLeg", "Char_RightLeg",
             // 레거시 스튜디오 오브젝트 (이전 빌드 호환)
             "StudioFloor", "StudioBackdrop", "AmbientLight",
             "TestSphere", "TestCube", "TestCylinder", "TestFlatCube",

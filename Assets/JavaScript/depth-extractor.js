@@ -559,12 +559,86 @@
     var renderLock = false;
     var version = '2.0.0';
 
+    // ═══════════════════════════════════════════════════════════════
+    // 6.5 DepthTransmitter — R-channel base64 전송 (Unity C++ 수신)
+    // ═══════════════════════════════════════════════════════════════
+    //
+    // 깊이 맵 렌더링 후 R-channel 데이터를 base64로 인코딩하여
+    // console.log("__DEPTH:512:<base64>") 형태로 전송한다.
+    // C++ BrowserClient::OnConsoleMessage에서 수신하여 디코딩한다.
+    //
+    // 최적화:
+    //   - R-channel만 추출 (RGBA 1MB → R 262KB → base64 ~350KB)
+    //   - DOM 변경 시에만 전송 (이벤트 구동형, 매 프레임 아님)
+
+    var DepthTransmitter = (function () {
+        var enabled = true;
+        var transmitCount = 0;
+
+        // base64 인코딩 룩업 테이블
+        var B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+        function encodeBase64(bytes) {
+            var len = bytes.length;
+            var result = '';
+            var i = 0;
+
+            while (i < len) {
+                var a = bytes[i++];
+                var b = i < len ? bytes[i++] : 0;
+                var c = i < len ? bytes[i++] : 0;
+
+                var triplet = (a << 16) | (b << 8) | c;
+
+                result += B64_CHARS[(triplet >> 18) & 0x3F];
+                result += B64_CHARS[(triplet >> 12) & 0x3F];
+                result += (i - 2 < len) ? B64_CHARS[(triplet >> 6) & 0x3F] : '=';
+                result += (i - 1 < len) ? B64_CHARS[triplet & 0x3F] : '=';
+            }
+
+            return result;
+        }
+
+        function transmit() {
+            if (!enabled) return;
+
+            var ctx = DepthRenderer.getContext();
+            if (!ctx) return;
+
+            var imageData = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            var src = imageData.data;
+            var pixelCount = CANVAS_SIZE * CANVAS_SIZE;
+
+            // R-channel만 추출
+            var rChannel = new Uint8Array(pixelCount);
+            for (var i = 0; i < pixelCount; i++) {
+                rChannel[i] = src[i * 4]; // R channel
+            }
+
+            // base64 인코딩 후 __DEPTH 프로토콜로 전송
+            var encoded = encodeBase64(rChannel);
+            console.log('__DEPTH:' + CANVAS_SIZE + ':' + encoded);
+
+            transmitCount++;
+        }
+
+        return {
+            transmit: transmit,
+            setEnabled: function (v) { enabled = v; },
+            isEnabled: function () { return enabled; },
+            getTransmitCount: function () { return transmitCount; }
+        };
+    })();
+
     function executeRender() {
         if (renderLock) return;
         renderLock = true;
         try {
             DepthRenderer.render();
             depthDirty = true;
+
+            // Phase 2: 렌더 후 깊이 데이터를 C++로 전송
+            DepthTransmitter.transmit();
         } finally {
             renderLock = false;
         }
@@ -780,6 +854,17 @@
                 signals: breakdown
             };
         },
+
+        // ─── 전송 제어 (Phase 2) ──────────────────────
+
+        /** C++ 전송 활성/비활성 */
+        setTransmitEnabled: function (v) { DepthTransmitter.setEnabled(v); },
+
+        /** C++ 전송 활성 여부 */
+        isTransmitEnabled: function () { return DepthTransmitter.isEnabled(); },
+
+        /** 전송 횟수 */
+        getTransmitCount: function () { return DepthTransmitter.getTransmitCount(); },
 
         /** 초기화 완료 플래그 */
         _initialized: false

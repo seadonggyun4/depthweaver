@@ -1,0 +1,91 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 28492e421e08b41ce9e79dd799916336, type: 3}
+  m_Name: UIShaderConfig
+  m_EditorClassIdentifier: Assembly-CSharp::UIShaderConfig
+  screenResolution: 1024
+  screenWorldSize: 8
+  screenSegments: 511
+  screenPosition: {x: 0, y: 10, z: -2}
+  screenRotation: {x: 0, y: 0, z: 0}
+  displacementScale: 1
+  displacementBias: 0
+  edgeFalloff: 0.05
+  emissionIntensity: 2
+  depthBlurIterations: 1
+  depthBlurKernelSize: 5
+  lightIntensity: 5000
+  lightRange: 30
+  cookieIntensityMultiplier: 1
+  cookieSaturationBoost: 1
+  cookieContrastCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 1
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 1
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  autoExposureEnabled: 1
+  autoExposureMinMultiplier: 0.6
+  autoExposureMaxMultiplier: 1.5
+  autoExposureSmoothSpeed: 3
+  enableQuadrantLights: 0
+  quadrantLightSpacing: 0.05
+  defaultURL: https://mui.com
+  enableInput: 1
+  cefFrameRate: 60
+  terrainSize: 100
+  terrainResolution: 128
+  terrainMaxHeight: 5
+  terrainNoiseScale: 50
+  terrainNoiseOctaves: 3
+  terrainBaseColor: {r: 0.25, g: 0.45, b: 0.15, a: 1}
+  terrainSmoothness: 0.3
+  skyExposure: 11
+  sunIntensity: 50000
+  sunColor: {r: 1, g: 0.96, b: 0.84, a: 1}
+  sunElevation: 45
+  sunAzimuth: -30
+  grassDensity: 8000
+  grassHeight: 0.4
+  grassHeightVariation: 0.15
+  grassColor: {r: 0.3, g: 0.55, b: 0.2, a: 1}
+  fogDistance: 200
+  fogMaxHeight: 30
+  fogColor: {r: 0.8, g: 0.85, b: 0.9, a: 1}
+  enableVolumetricFog: 0
+  windStrength: 0.3
+  windTurbulence: 0.2
+  windDirection: 60
+  targetFrameRate: 60
+  enableSSR: 1
+  enableSSAO: 1
+  autoStartDemo: 1
+  autoStartCruise: 1
+  showUIOnStart: 1

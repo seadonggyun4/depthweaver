@@ -4,15 +4,15 @@
 
 > *Weaving light from the invisible depth of the web.*
 
-[![Unity](https://img.shields.io/badge/Unity-2022.3%2B%20LTS-000000?style=flat&logo=unity&logoColor=white)](https://unity.com)
+[![Unity](https://img.shields.io/badge/Unity-6.3%20LTS-000000?style=flat&logo=unity&logoColor=white)](https://unity.com)
 [![HDRP](https://img.shields.io/badge/HDRP-High%20Definition-blueviolet?style=flat)](https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@latest)
-[![CEF](https://img.shields.io/badge/Chromium-Embedded%20Framework-4285F4?style=flat&logo=googlechrome&logoColor=white)](https://bitbucket.org/chromiumembedded/cef)
+[![CEF](https://img.shields.io/badge/CEF-145.0.28-4285F4?style=flat&logo=googlechrome&logoColor=white)](https://bitbucket.org/chromiumembedded/cef)
 [![C#](https://img.shields.io/badge/C%23-10.0-239120?style=flat&logo=csharp&logoColor=white)](https://docs.microsoft.com/en-us/dotnet/csharp/)
 [![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat&logo=cplusplus&logoColor=white)](https://isocpp.org/)
 [![HLSL](https://img.shields.io/badge/HLSL-Shader-ff6600?style=flat)](https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl)
 [![JavaScript](https://img.shields.io/badge/JavaScript-ES6-F7DF1E?style=flat&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20|%20macOS-lightgrey?style=flat)](https://github.com)
-[![License](https://img.shields.io/badge/License-Proprietary-red?style=flat)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat)](LICENSE)
 
 ---
 
@@ -42,6 +42,7 @@ This approach differs from prior work (CineShader, CSS3D Renderer, MiDaS) by ope
 - [Build Instructions](#build-instructions)
 - [Keyboard Controls](#keyboard-controls)
 - [Acknowledgments](#acknowledgments)
+- [License](#license)
 
 ---
 
@@ -118,17 +119,22 @@ The system separates color and depth texture production into two independent upd
 ```
 Web Page (CEF Offscreen Render)
 │
-├── [Every Frame] Color Buffer (RGB)
+├── [Every Frame] Color Buffer (BGRA32)
 │   ├──→ Screen Mesh Albedo Texture
-│   └──→ RectAreaLight Cookie Texture
+│   └──→ RectAreaLight Cookie Texture (GPU: saturation + LUT + intensity)
 │
-└── [DOM Mutation Only] Depth Canvas (Grayscale)
-│
+└── [DOM Mutation Only] Depth Canvas (Grayscale, 512x512)
+    │    depth-extractor.js renders depth → DepthTransmitter encodes R-channel
+    │    → console.log("__DEPTH:512:<base64>")
+    │    → C++ OnConsoleMessage → Base64 decode → depthBuffer_
+    │    → C# PollDepthFrame → Texture2D(R8)
+    │    → DepthTextureProcessor (GPU Gaussian blur)
+    │
     └──→ Screen Mesh Displacement Map
          vertex += normal * depth.r * displacementScale
 ```
 
-The depth canvas is updated only when the DOM changes (via `MutationObserver`), while the color buffer is captured every frame. This decoupled architecture yields zero per-frame depth computation cost for static pages.
+The depth canvas is updated only when the DOM changes (via `MutationObserver`), while the color buffer is captured every frame. This decoupled architecture yields zero per-frame depth computation cost for static pages. The depth data transfer employs a console message protocol (`__DEPTH:<size>:<base64>`) to bridge the JavaScript→C++→C# boundary without requiring additional IPC mechanisms.
 
 ---
 
@@ -138,17 +144,20 @@ The depth canvas is updated only when the DOM changes (via `MutationObserver`), 
 
 The system embeds a full Chromium browser via a C++ native plugin for offscreen rendering, with a **Strategy Pattern** abstraction (`IBrowserBackend`) enabling runtime browser engine replacement.
 
-**Native Plugin (C++17):**
-- Offscreen rendering with configurable resolution and frame rate
-- Double-buffered pixel transfer with mutex-guarded front/back swap
+**Native Plugin (C++17, CEF 145.0.28 / Chromium 145):**
+- Offscreen rendering via `CefRenderHandler::OnPaint()` with configurable resolution and frame rate
+- `--single-process` mode for macOS ARM64 compatibility (CEF subprocess launcher bypass)
+- Double-buffered pixel transfer with mutex-guarded front/back swap and coordinate correction (X+Y flip for CEF→Unity coordinate system alignment)
 - Dirty rectangle tracking for partial-update optimization
 - Full input forwarding: mouse (move, click, wheel), keyboard (key down/up, char)
-- JavaScript execution and evaluation bridge
+- JavaScript execution and evaluation bridge with async callback polling
+- `DW_Log()` ring buffer (32 KB) for C++ → Unity Console log relay via P/Invoke polling
+- `CefDisplayHandler::OnConsoleMessage()` — intercepts depth data transmitted from JavaScript (see Depth Transfer Protocol below)
 - Cross-platform build system (Windows x64 / macOS ARM64 via CMake)
 
 **Unity Bridge (C#):**
 - `IBrowserBackend` — Abstract interface decoupling browser engine from the pipeline
-- `CEFNativeBackend` — P/Invoke-based implementation wrapping 25+ native API calls
+- `CEFNativeBackend` — P/Invoke-based implementation wrapping 30+ native API calls, including depth frame polling
 - `CEFTextureSource` — `ITextureSource` implementation with three transfer modes:
   - **Standard**: `LoadRawTextureData()` single-buffer upload
   - **DoubleBuffered**: Pingpong `Texture2D[2]` for GPU stall prevention
@@ -171,9 +180,27 @@ A JavaScript module (`depth-extractor.js`) injected into the CEF browser that ge
 
 **Presets:** Three built-in weight configurations — `balanced`, `materialDesign`, `flatDesign` — optimized for different design systems.
 
+**Depth Transfer Protocol (JS → C++ → C#):**
+
+The depth canvas data traverses a multi-stage pipeline from JavaScript to the Unity shader:
+
+```
+depth-extractor.js                    C++ Native Plugin                Unity C#
+┌──────────────┐    console.log()    ┌──────────────────┐   P/Invoke  ┌─────────────────┐
+│DepthTransmitter│──────────────────→│OnConsoleMessage()│───────────→│PollDepthFrame() │
+│  R-channel     │  "__DEPTH:512:    │  Base64Decode()  │            │  NativeArray<T>  │
+│  Base64 encode │   <base64>"       │  depthBuffer_[]  │            │  Texture2D (R8)  │
+└──────────────┘                    └──────────────────┘            └─────────────────┘
+```
+
+- `DepthTransmitter` (JavaScript) — Extracts the R-channel from the 512x512 depth canvas (262,144 bytes), encodes as RFC 4648 Base64, and transmits via `console.log("__DEPTH:<size>:<base64>")`
+- `BrowserClient::OnConsoleMessage()` (C++) — Intercepts `__DEPTH:` prefixed console messages, decodes Base64 via lookup table, stores in mutex-guarded `depthBuffer_` with atomic `depthReady_` flag
+- `CEFTextureSource.PollDepthFrame()` (C#) — Polls `HasNewDepthFrame`, copies depth pixels via GC-pinned buffer, loads into `Texture2D(R8)` using `NativeArray<byte>` for precise size handling
+- `TexturePipelineManager` routes the depth texture through `DepthTextureProcessor.ApplyBlur()` (GPU Gaussian blur) before applying to the displacement shader
+
 **Depth Texture Post-Processing (GPU):**
 - `DepthBlur.compute` — Separable Gaussian blur (horizontal + vertical, 2-pass) on the depth map
-- `DepthTextureProcessor.cs` — Pingpong buffer management with configurable iteration count
+- `DepthTextureProcessor.cs` — Pingpong buffer management with configurable iteration count, integrated into `TexturePipelineManager` depth path
 
 **Weight Tuning:**
 - `DepthWeightPreset` (ScriptableObject) — JSON serialization, interpolation between presets, factory methods
@@ -373,7 +400,7 @@ depthweaver/
         ├── cef_plugin.h                    # C API declarations
         ├── cef_plugin.cpp                  # API implementation + global state
         ├── render_handler.h/cpp            # Offscreen CefRenderHandler
-        ├── browser_client.h/cpp            # CefClient + load events
+        ├── browser_client.h/cpp            # CefClient + CefDisplayHandler + depth reception
         └── browser_app.h/cpp               # CefApp process handler
 ```
 
@@ -383,20 +410,24 @@ depthweaver/
 
 | Metric | Value |
 |--------|-------|
-| Total Source Files | 58 |
-| Total Lines of Code | ~12,300 |
+| Total Source Files | 58+ |
+| Total Lines of Code | ~13,000+ |
 | Languages | C# (45%), HLSL (25%), JavaScript (20%), C++ (10%) |
 | Render Resolution | 512 x 512 (configurable) |
 | Max Mesh Subdivision | 511 x 511 (262,144 vertices) |
 | LOD Levels | 3 (High / Medium / Low) |
 | Depth Signals | 6 (extensible via plugin registry) |
 | Depth Update Trigger | DOM Mutation (event-driven, 0 cost when static) |
-| Cookie Processing | GPU Blit (single pass) |
-| Auto-Exposure | Progressive downsample (512 → 1) |
+| Depth Transfer | Base64 via console.log → C++ OnConsoleMessage → C# Texture2D (R8) |
+| Depth Post-Processing | GPU separable Gaussian blur (compute shader, configurable iterations) |
+| Cookie Processing | GPU Blit (single pass: saturation + LUT contrast + intensity) |
+| Auto-Exposure | Progressive downsample (512 → 1, BT.709 weighted) |
 | Target Performance | 60 FPS at 1080p (RTX 3060 tier) |
 | Platform Support | Windows x64, macOS ARM64 |
-| Unity Version | 2022.3+ LTS |
+| Unity Version | 6.3 LTS (6000.3.10f1) |
 | Render Pipeline | HDRP (High Definition Render Pipeline) |
+| CEF Version | 145.0.28+g51162e8 (Chromium 145.0.7632.160) |
+| CEF Process Mode | `--single-process` (macOS ARM64 compatibility) |
 
 ---
 
@@ -404,36 +435,37 @@ depthweaver/
 
 ### Prerequisites
 
-- Unity 2022.3 LTS or later with HDRP package
+- Unity 6.3 LTS (6000.3.10f1) or later with HDRP package
 - CMake 3.20+ (for native plugin)
 - Windows: Visual Studio 2022 with C++ desktop workload
-- macOS: Xcode 14+ with Command Line Tools
-- CEF binary distribution (matching platform)
+- macOS: Xcode 15+ with Command Line Tools
+- CEF binary distribution v145.0.28+ ([download from cef-builds.spotifycdn.com](https://cef-builds.spotifycdn.com/index.html))
 
 ### Native Plugin Build
 
 ```bash
-# Windows
-cd NativePlugin
-cmake -B build -G "Visual Studio 17 2022" -A x64 \
-      -DCEF_ROOT="path/to/cef_binary"
-cmake --build build --config Release
-
-# macOS
+# macOS ARM64 (verified)
 cd NativePlugin
 cmake -B build -G Xcode \
       -DCMAKE_OSX_ARCHITECTURES=arm64 \
-      -DCEF_ROOT="path/to/cef_binary"
+      -DCEF_ROOT="../cef_binary_145.0.28+g51162e8+chromium-145.0.7632.160_macosarm64_minimal"
+cmake --build build --config Release
+
+# Windows x64
+cd NativePlugin
+cmake -B build -G "Visual Studio 17 2022" -A x64 \
+      -DCEF_ROOT="path/to/cef_binary_windows64"
 cmake --build build --config Release
 ```
 
 ### Unity Project Setup
 
-1. Open the project in Unity 2022.3+ with HDRP
+1. Open the project in Unity 6.3 LTS with HDRP
 2. Verify HDRP Asset settings: Area Lights, Shadows, SSR, SSAO enabled
 3. Create `UIShaderConfig` asset: `Create > UIShader > Config`
 4. Build studio scene: `UIShader > Build Studio Scene`
 5. Place native plugin binaries in `Assets/Plugins/` (platform-specific subfolders)
+6. Place CEF framework in the appropriate location for your platform
 
 ### Standalone Build
 
@@ -464,3 +496,19 @@ Unity Menu → UIShader > Build > macOS (Apple Silicon)
 ## Acknowledgments
 
 This project was inspired by [CineShader](https://cineshader.com) by Lusion, which demonstrated the rendering technique of using Shadertoy GLSL output as both a displacement map and area light cookie in a virtual studio environment. Depthweaver extends this concept to arbitrary web pages through the introduction of the Composite Depth Scoring System.
+
+---
+
+## License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
+
+```
+Copyright 2025 seadonggyun4
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+```

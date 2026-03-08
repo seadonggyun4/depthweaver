@@ -20,6 +20,9 @@ extern "C" {
     // 초기화 및 종료
     // ═══════════════════════════════════════════════════
 
+    /// Helper 앱 경로 설정 (macOS 전용, CEF_Initialize 전에 호출)
+    EXPORT void CEF_SetHelperPath(const char* path);
+
     /// CEF 초기화. 반환: 0=성공, -1=이미 초기화, -2=CEF 실패, -3=브라우저 생성 실패
     EXPORT int CEF_Initialize(int width, int height, int frameRate);
 
@@ -82,5 +85,38 @@ extern "C" {
     // ═══════════════════════════════════════════════════
 
     EXPORT void CEF_Resize(int newWidth, int newHeight);
+
+    // ═══════════════════════════════════════════════════
+    // 진단
+    // ═══════════════════════════════════════════════════
+
+    /// 진단 정보: [0]=OnPaint 횟수, [1]=GetViewRect 횟수, [2]=브라우저 존재, [3]=렌더러 존재
+    EXPORT void CEF_GetDiagnostics(int* buffer, int maxLen);
+
+    // ═══════════════════════════════════════════════════
+    // 깊이 데이터 (Phase 2)
+    // ═══════════════════════════════════════════════════
+
+    /// 새로운 깊이 프레임이 있는지 확인
+    EXPORT bool CEF_HasNewDepthFrame();
+
+    /// 깊이 픽셀 데이터를 복사 (R-channel only)
+    /// dest: size×size 바이트 버퍼
+    /// outSize: 깊이 맵 한 변 크기 (예: 512)
+    /// 반환: 성공 여부
+    EXPORT bool CEF_GetDepthPixels(void* dest, int* outSize);
+
+    /// 깊이 프레임 수신 횟수 (진단용)
+    EXPORT int CEF_GetDepthFrameCount();
+
+    // ═══════════════════════════════════════════════════
+    // 로그 시스템 (Unity Console 출력용)
+    // ═══════════════════════════════════════════════════
+
+    /// 버퍼링된 로그 메시지를 가져온다.
+    /// buffer: 로그 메시지를 받을 char 배열
+    /// maxLen: 버퍼 최대 크기
+    /// 반환: 실제 복사된 바이트 수 (0이면 새 로그 없음)
+    EXPORT int CEF_GetLogMessages(char* buffer, int maxLen);
 
 } // extern "C"

@@ -469,10 +469,11 @@ public class StudioEnvironment : MonoBehaviour
         light.color = fillLightColor;
         light.shadows = LightShadows.Soft;
 
-        // HDRP 설정
+        // HDRP 설정 (Unity 6: Light 컴포넌트에서 직접 설정)
+        light.lightUnit = UnityEngine.Rendering.LightUnit.Lux;
+        light.intensity = fillLightIntensity;
         var hdLight = lightObj.AddComponent<HDAdditionalLightData>();
-        hdLight.SetIntensity(fillLightIntensity, LightUnit.Lux);
-        hdLight.SetShadowResolution(512);
+        hdLight.shadowResolution.level = 1; // 512
 
         generatedObjects.Add(lightObj);
     }

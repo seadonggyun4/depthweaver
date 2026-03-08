@@ -27,6 +27,7 @@ public:
 
     // CefRenderHandler
     void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
+    bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info) override;
     void OnPaint(CefRefPtr<CefBrowser> browser,
                  PaintElementType type,
                  const RectList& dirtyRects,
@@ -48,6 +49,10 @@ public:
     int GetWidth() const { return width_; }
     int GetHeight() const { return height_; }
 
+    // 진단 카운터
+    int GetPaintCount() const { return paintCount_; }
+    int GetViewRectCount() const { return viewRectCount_; }
+
 private:
     int width_, height_;
     uint8_t* frontBuffer_;
@@ -61,6 +66,10 @@ private:
     std::mutex dirtyMutex_;
 
     double GetCurrentTimeMs() const;
+
+    int paintCount_ = 0;
+    int viewRectCount_ = 0;
+    int sizeMismatchCount_ = 0;
 
     IMPLEMENT_REFCOUNTING(OffscreenRenderHandler);
     DISALLOW_COPY_AND_ASSIGN(OffscreenRenderHandler);

@@ -17,6 +17,7 @@ MemoryCaptures/
 .idea/
 *.csproj
 *.sln
+*.slnx
 *.suo
 *.user
 *.pidb
@@ -34,6 +35,21 @@ MemoryCaptures/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Native plugin build artifacts
+NativePlugin/build/
+
+# CEF binary distribution (large, download separately)
+cef_binary*/
+Assets/Plugins/CEF/
+Assets/Plugins/CEF.meta
+
+# Crash dumps
+mono_crash.*.json
+
+# Recovery files
+Assets/_Recovery/
+Assets/_Recovery.meta
 
 # Project-specific exclusions
 CLAUDE.md

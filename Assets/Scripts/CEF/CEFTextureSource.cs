@@ -77,6 +77,7 @@ public class CEFTextureSource : MonoBehaviour, ITextureSource
 
     // 깊이 텍스처 (Phase 2 연동)
     private bool depthDirty;
+    private CEFNativeBackend nativeBackend; // Phase 2: 캐스트된 백엔드 참조
 
     // 성능 측정
     private float lastTransferTimeMs;
@@ -117,6 +118,9 @@ public class CEFTextureSource : MonoBehaviour, ITextureSource
 
         // 백엔드 이벤트 연결
         backend.OnLoadCompleted += OnPageLoadCompleted;
+
+        // Phase 2: 네이티브 백엔드 참조 캐싱 (깊이 폴링용)
+        nativeBackend = backend as CEFNativeBackend;
 
         // 기본 URL 로드
         if (config != null && !string.IsNullOrEmpty(config.defaultURL))
@@ -192,14 +196,23 @@ public class CEFTextureSource : MonoBehaviour, ITextureSource
         // 백엔드 틱 (CEF 메시지 루프)
         backend.Tick();
 
+        bool colorUpdated = false;
+
         // 새 프레임 확인 및 텍스처 전송
         if (backend.HasNewFrame())
         {
             float startTime = Time.realtimeSinceStartup;
             TransferFrame();
             lastTransferTimeMs = (Time.realtimeSinceStartup - startTime) * 1000f;
+            colorUpdated = true;
+        }
 
-            // 이벤트 발신
+        // Phase 2: 깊이 프레임 폴링
+        PollDepthFrame();
+
+        // 이벤트 발신 (색상 또는 깊이 변경 시)
+        if (colorUpdated || depthDirty)
+        {
             EmitTextureUpdate();
         }
     }
@@ -301,6 +314,50 @@ public class CEFTextureSource : MonoBehaviour, ITextureSource
     {
         DepthTexture = processedDepth;
         depthDirty = true;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // Phase 2: 깊이 프레임 폴링
+    // ═══════════════════════════════════════════════════
+
+    /// <summary>
+    /// 네이티브 플러그인에서 새로운 깊이 프레임을 폴링하여
+    /// DepthTexture를 갱신한다.
+    /// depth-extractor.js → console.log("__DEPTH:...") → C++ → 여기서 수신.
+    /// </summary>
+    private void PollDepthFrame()
+    {
+        if (nativeBackend == null || !nativeBackend.HasNewDepthFrame) return;
+
+        if (nativeBackend.CopyDepthPixels(out byte[] data, out int size))
+        {
+            if (DepthTexture == null || DepthTexture.width != size)
+            {
+                // 깊이 텍스처 크기가 다르면 재생성
+                if (DepthTexture != null) Destroy(DepthTexture);
+                DepthTexture = new Texture2D(size, size, TextureFormat.R8, false);
+                DepthTexture.filterMode = FilterMode.Bilinear;
+                DepthTexture.wrapMode = TextureWrapMode.Clamp;
+                DepthTexture.name = "CEF_Depth";
+            }
+
+            int expectedBytes = size * size;
+
+            // data 배열이 텍스처 크기보다 클 수 있음 (버퍼 사전 할당)
+            // LoadRawTextureData(IntPtr, int)를 사용하여 정확한 바이트 수만 로드
+            if (data.Length >= expectedBytes)
+            {
+                var nativeArray = new Unity.Collections.NativeArray<byte>(
+                    expectedBytes, Unity.Collections.Allocator.Temp,
+                    Unity.Collections.NativeArrayOptions.UninitializedMemory);
+                Unity.Collections.NativeArray<byte>.Copy(data, nativeArray, expectedBytes);
+                DepthTexture.LoadRawTextureData(nativeArray);
+                nativeArray.Dispose();
+
+                DepthTexture.Apply(false);
+                depthDirty = true;
+            }
+        }
     }
 
     // ═══════════════════════════════════════════════════

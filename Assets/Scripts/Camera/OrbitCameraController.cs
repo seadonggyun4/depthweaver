@@ -62,10 +62,10 @@ public class OrbitCameraController : MonoBehaviour
     [Header("Presets")]
     public CameraPreset[] presets = new CameraPreset[]
     {
-        new CameraPreset("정면 와이드",   0f,   8f, 12f),
-        new CameraPreset("좌측 45도",   -45f, 15f, 10f),
-        new CameraPreset("우측 상단",    30f, 35f, 13f),
-        new CameraPreset("클로즈업",      5f,   5f,  5f)
+        new CameraPreset("비스듬 정면",    15f,  8f, 12f),   // 변위가 잘 보이는 약간 비스듬한 정면
+        new CameraPreset("측면 프로필",    60f,  5f, 10f),   // 변위 뾰족한 실루엣이 드라마틱하게 보이는 측면
+        new CameraPreset("와이드 전경",   -10f, 18f, 18f),   // 스크린 + 환경 전체가 보이는 넓은 시야
+        new CameraPreset("디테일 클로즈업", 30f,  3f,  6f)   // 변위 표면 디테일 근접
     };
 
     [System.Serializable]
@@ -117,11 +117,11 @@ public class OrbitCameraController : MonoBehaviour
     // 내부 상태
     // ═══════════════════════════════════════════════════
 
-    private float currentHAngle;
+    private float currentHAngle = 15f;
     private float currentVAngle = 8f;
     private float currentDist;
 
-    private float targetHAngle;
+    private float targetHAngle = 15f;
     private float targetVAngle = 8f;
     private float targetDist;
 
@@ -152,7 +152,7 @@ public class OrbitCameraController : MonoBehaviour
     {
         if (target == null)
         {
-            ScreenMeshGenerator screenMesh = FindObjectOfType<ScreenMeshGenerator>();
+            ScreenMeshGenerator screenMesh = FindFirstObjectByType<ScreenMeshGenerator>();
             if (screenMesh != null)
                 target = screenMesh.transform;
             else

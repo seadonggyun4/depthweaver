@@ -29,12 +29,12 @@ public class SunLightModule : IEnvironmentModule
         light.color = config.sunColor;
         light.shadows = LightShadows.Soft;
 
-        // HDRP 추가 설정
-        HDAdditionalLightData hdLight = sunObject.AddComponent<HDAdditionalLightData>();
-        hdLight.lightUnit = LightUnit.Lux;
-        hdLight.intensity = config.sunIntensity;
+        // HDRP 설정 (Unity 6: Light 컴포넌트에서 직접 설정)
+        light.lightUnit = UnityEngine.Rendering.LightUnit.Lux;
+        light.intensity = config.sunIntensity;
 
-        // 그림자 품질
+        // HDRP 그림자 품질
+        HDAdditionalLightData hdLight = sunObject.AddComponent<HDAdditionalLightData>();
         hdLight.shadowResolution.level = 2; // Medium-High
 
         Debug.Log($"[UIShader] 태양광 생성: {config.sunIntensity} lux, " +

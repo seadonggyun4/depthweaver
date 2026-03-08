@@ -10,6 +10,9 @@ public class UIShaderBootstrap : MonoBehaviour
     [Header("Configuration")]
     [SerializeField] private UIShaderConfig config;
 
+    [Header("CEF")]
+    [SerializeField] private CEFBridge cefBridge;
+
     [Header("Debug")]
     [SerializeField] private bool showDebugOverlay = true;
     [SerializeField] private bool logPerformanceStats = false;
@@ -37,7 +40,21 @@ public class UIShaderBootstrap : MonoBehaviour
 
     void Start()
     {
-        pipelineManager = FindObjectOfType<TexturePipelineManager>();
+        pipelineManager = FindFirstObjectByType<TexturePipelineManager>();
+
+        // CEFBridge 이벤트 연결
+        if (cefBridge != null)
+        {
+            var overlay = FindFirstObjectByType<UIShaderOverlay>();
+            if (overlay != null)
+                overlay.OnURLRequested += cefBridge.LoadURL;
+
+            var autoPlay = FindFirstObjectByType<DemoAutoPlay>();
+            if (autoPlay != null)
+                autoPlay.OnLoadURL += cefBridge.LoadURL;
+
+            Debug.Log("[UIShader] CEFBridge 이벤트 연결 완료");
+        }
 
         Debug.Log("[UIShader] ═══════════════════════════════════════════");
         Debug.Log("[UIShader] UIShader 시스템 초기화 완료");
@@ -141,7 +158,7 @@ public class UIShaderBootstrap : MonoBehaviour
             GUILayout.Label($"Light Intensity: {config.lightIntensity:F0} lm");
         }
 
-        OrbitCameraController cam = FindObjectOfType<OrbitCameraController>();
+        OrbitCameraController cam = FindFirstObjectByType<OrbitCameraController>();
         if (cam != null && cam.ActivePresetIndex >= 0 && cam.ActivePresetIndex < cam.presets.Length)
         {
             GUILayout.Label($"Camera: {cam.presets[cam.ActivePresetIndex].name}");

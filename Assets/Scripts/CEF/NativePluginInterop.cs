@@ -37,6 +37,9 @@ public static class NativePluginInterop
     // 초기화 및 종료
     // ═══════════════════════════════════════════════════
 
+    [DllImport(PLUGIN_NAME, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    public static extern void CEF_SetHelperPath([MarshalAs(UnmanagedType.LPStr)] string path);
+
     [DllImport(PLUGIN_NAME, CallingConvention = CallingConvention.Cdecl)]
     public static extern int CEF_Initialize(int width, int height, int frameRate);
 
@@ -152,6 +155,50 @@ public static class NativePluginInterop
     public static extern void CEF_Resize(int newWidth, int newHeight);
 
     // ═══════════════════════════════════════════════════
+    // 진단
+    // ═══════════════════════════════════════════════════
+
+    [DllImport(PLUGIN_NAME, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void CEF_GetDiagnostics(
+        [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 1)] int[] buffer,
+        int maxLen
+    );
+
+    // ═══════════════════════════════════════════════════
+    // 깊이 데이터 (Phase 2)
+    // ═══════════════════════════════════════════════════
+
+    /// <summary>새로운 깊이 프레임이 있는지 확인</summary>
+    [DllImport(PLUGIN_NAME, CallingConvention = CallingConvention.Cdecl)]
+    public static extern bool CEF_HasNewDepthFrame();
+
+    /// <summary>
+    /// 깊이 픽셀 데이터를 복사 (R-channel only).
+    /// dest: size×size 바이트 버퍼의 IntPtr.
+    /// outSize: 깊이 맵 한 변 크기 (예: 512).
+    /// </summary>
+    [DllImport(PLUGIN_NAME, CallingConvention = CallingConvention.Cdecl)]
+    public static extern bool CEF_GetDepthPixels(IntPtr dest, out int outSize);
+
+    /// <summary>깊이 프레임 수신 횟수 (진단용)</summary>
+    [DllImport(PLUGIN_NAME, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int CEF_GetDepthFrameCount();
+
+    // ═══════════════════════════════════════════════════
+    // 로그 시스템
+    // ═══════════════════════════════════════════════════
+
+    /// <summary>
+    /// 네이티브 플러그인의 버퍼링된 로그 메시지를 가져온다.
+    /// 호출 후 네이티브 버퍼는 클리어된다.
+    /// </summary>
+    [DllImport(PLUGIN_NAME, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int CEF_GetLogMessages(
+        [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 1)] byte[] buffer,
+        int maxLen
+    );
+
+    // ═══════════════════════════════════════════════════
     // 유틸리티
     // ═══════════════════════════════════════════════════
 
@@ -181,6 +228,7 @@ public static class NativePluginInterop
             case -1: return "이미 초기화됨";
             case -2: return "CEF 초기화 실패";
             case -3: return "브라우저 생성 실패";
+            case -4: return "CEF 프레임워크 로드 실패";
             default: return $"알 수 없는 오류 ({errorCode})";
         }
     }

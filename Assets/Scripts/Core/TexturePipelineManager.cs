@@ -36,6 +36,9 @@ public class TexturePipelineManager : MonoBehaviour
     [Tooltip("사분면 다중 광원 시스템 (선택적, config에서 활성/비활성)")]
     [SerializeField] private QuadrantLightSystem quadrantLightSystem;
 
+    [Tooltip("깊이 텍스처 후처리 (선택적, 가우시안 블러 적용)")]
+    [SerializeField] private DepthTextureProcessor depthProcessor;
+
     [Header("Texture Source")]
     [Tooltip("ITextureSource를 구현하는 MonoBehaviour를 할당.\n" +
              "Phase 0: StaticTextureSource\n" +
@@ -245,10 +248,20 @@ public class TexturePipelineManager : MonoBehaviour
             colorUpdateCount++;
         }
 
-        // ─── 깊이 텍스처 → 변위 맵 (변경 시에만) ───
+        // ─── 깊이 텍스처 → (블러 후처리) → 변위 맵 (변경 시에만) ───
         if (args.DepthChanged && args.DepthTexture != null)
         {
-            screenMaterial.SetTexture(DepthTexId, args.DepthTexture);
+            Texture depthOutput = args.DepthTexture;
+
+            // Phase 2: DepthTextureProcessor를 통해 가우시안 블러 적용
+            if (depthProcessor != null && depthProcessor.IsInitialized)
+            {
+                var blurredRT = depthProcessor.ApplyBlur(args.DepthTexture);
+                if (blurredRT != null)
+                    depthOutput = blurredRT;
+            }
+
+            screenMaterial.SetTexture(DepthTexId, depthOutput);
             depthUpdateCount++;
         }
     }

@@ -12,8 +12,8 @@ public class UIShaderConfig : ScriptableObject
     // ═══════════════════════════════════════════════════
 
     [Header("Screen")]
-    [Tooltip("CEF 및 텍스처 해상도 (CineShader 호환: 512)")]
-    public int screenResolution = 512;
+    [Tooltip("CEF 및 텍스처 해상도 (Retina 기본: 1024)")]
+    public int screenResolution = 1024;
 
     [Tooltip("스크린 메시 월드 크기 (CineShader SCREEN_SIZE = 6)")]
     public float screenWorldSize = 6f;
@@ -25,7 +25,7 @@ public class UIShaderConfig : ScriptableObject
     public Vector3 screenPosition = new Vector3(0f, 3.5f, -2f);
 
     [Tooltip("스크린 메시 회전 (카메라를 향하도록)")]
-    public Vector3 screenRotation = new Vector3(0f, 180f, 0f);
+    public Vector3 screenRotation = new Vector3(0f, 0f, 0f);
 
     // ═══════════════════════════════════════════════════
     // 변위 설정

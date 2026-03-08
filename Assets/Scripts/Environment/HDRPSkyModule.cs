@@ -46,9 +46,8 @@ public class HDRPSkyModule : IEnvironmentModule
         whiteBalance.temperature.Override(0f); // 중립 (6500K)
 
         // ─── Indirect Lighting Controller (간접광) ───
-        IndirectLightingController indirectLight = profile.Add<IndirectLightingController>();
-        indirectLight.indirectDiffuseIntensity.Override(1f);
-        indirectLight.indirectSpecularIntensity.Override(1f);
+        // Unity 6.x: 기본값(1.0) 사용 — 별도 오버라이드 불필요
+        profile.Add<IndirectLightingController>();
 
         volume.profile = profile;
 

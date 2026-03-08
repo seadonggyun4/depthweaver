@@ -55,9 +55,9 @@ public class PerformanceProfiler : MonoBehaviour
     void Start()
     {
         frameTimes = new float[historySize];
-        pipelineManager = FindObjectOfType<TexturePipelineManager>();
-        demoAutoPlay = FindObjectOfType<DemoAutoPlay>();
-        cameraController = FindObjectOfType<OrbitCameraController>();
+        pipelineManager = FindFirstObjectByType<TexturePipelineManager>();
+        demoAutoPlay = FindFirstObjectByType<DemoAutoPlay>();
+        cameraController = FindFirstObjectByType<OrbitCameraController>();
     }
 
     void Update()
@@ -104,14 +104,6 @@ public class PerformanceProfiler : MonoBehaviour
         // 메모리
         GUILayout.Label($"Memory (Total):  {totalMemMB} MB", normalStyle);
         GUILayout.Label($"Memory (GC):     {gcMemMB} MB", normalStyle);
-
-        // 에디터 전용 통계
-#if UNITY_EDITOR
-        GUILayout.Label("─────────────────────────────────", normalStyle);
-        GUILayout.Label($"Draw Calls:  {UnityStats.drawCalls}", normalStyle);
-        GUILayout.Label($"Triangles:   {UnityStats.triangles:N0}", normalStyle);
-        GUILayout.Label($"Batches:     {UnityStats.batches}", normalStyle);
-#endif
 
         // 파이프라인 상태
         if (pipelineManager != null)

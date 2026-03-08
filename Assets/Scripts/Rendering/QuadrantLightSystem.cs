@@ -144,17 +144,19 @@ public class QuadrantLightSystem : MonoBehaviour
 
             // ─── Light ───
             Light light = obj.AddComponent<Light>();
-            light.type = LightType.Area;
+            light.type = LightType.Rectangle;
             light.color = Color.white;
             light.shadows = LightShadows.Soft;
             light.range = config.lightRange;
 
+            // ─── 광원 크기/강도 (Unity 6: Light 컴포넌트에서 직접 설정) ───
+            float effectiveSize = quadSize - spacing;
+            light.areaSize = new Vector2(effectiveSize, effectiveSize);
+            light.lightUnit = UnityEngine.Rendering.LightUnit.Lumen;
+            light.intensity = config.lightIntensity / QUADRANT_COUNT;
+
             // ─── HDRP 확장 데이터 ───
             HDAdditionalLightData hdData = obj.AddComponent<HDAdditionalLightData>();
-            float effectiveSize = quadSize - spacing;
-            hdData.SetAreaLightSize(new Vector2(effectiveSize, effectiveSize));
-            hdData.lightUnit = LightUnit.Lumen;
-            hdData.intensity = config.lightIntensity / QUADRANT_COUNT;
             hdData.shadowResolution.level = 0; // Low (4광원이므로 개별 그림자 해상도 절감)
 
             // ─── 쿠키 RenderTexture ───
@@ -244,8 +246,8 @@ public class QuadrantLightSystem : MonoBehaviour
         float perQuadrant = totalIntensity / QUADRANT_COUNT;
         for (int i = 0; i < QUADRANT_COUNT; i++)
         {
-            if (hdLightDataArray[i] != null)
-                hdLightDataArray[i].intensity = perQuadrant;
+            if (quadLights[i] != null)
+                quadLights[i].intensity = perQuadrant;
         }
     }
 
@@ -275,9 +277,9 @@ public class QuadrantLightSystem : MonoBehaviour
 
         for (int i = 0; i < QUADRANT_COUNT; i++)
         {
-            if (hdLightDataArray[i] != null)
+            if (quadLights[i] != null)
             {
-                hdLightDataArray[i].SetAreaLightSize(new Vector2(effectiveSize, effectiveSize));
+                quadLights[i].areaSize = new Vector2(effectiveSize, effectiveSize);
                 quadLights[i].range = config.lightRange;
             }
         }

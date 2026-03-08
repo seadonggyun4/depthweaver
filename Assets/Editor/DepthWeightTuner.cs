@@ -296,7 +296,7 @@ public class DepthWeightTunerEditor : Editor
         var bridgeType = System.Type.GetType("CEFBridge");
         if (bridgeType != null)
         {
-            var bridge = FindObjectOfType(bridgeType) as MonoBehaviour;
+            var bridge = Object.FindFirstObjectByType(bridgeType) as MonoBehaviour;
             if (bridge != null)
             {
                 // 리플렉션으로 ExecuteJavaScript 호출 (Phase 1 의존성 제거)

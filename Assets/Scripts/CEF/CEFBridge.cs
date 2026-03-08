@@ -185,8 +185,8 @@ public class CEFBridge : MonoBehaviour
     /// </summary>
     public void UpdateDepthWeights(float w1, float w2, float w3, float w4, float w5, float w6)
     {
-        string script = $"if(window.__depthWeaver){{" +
-                        $"window.__depthWeaver.updateWeights({{" +
+        string script = $"if(window.__UIShader){{" +
+                        $"window.__UIShader.updateWeights({{" +
                         $"domDepth:{w1:F3},stackContext:{w2:F3}," +
                         $"boxShadow:{w3:F3},transformZ:{w4:F3}," +
                         $"opacity:{w5:F3},position:{w6:F3}" +

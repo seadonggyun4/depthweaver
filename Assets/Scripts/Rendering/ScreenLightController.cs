@@ -117,12 +117,12 @@ public class ScreenLightController : MonoBehaviour
         }
 
         // ─── 광원 유형: Area (Rectangle) ───
-        areaLight.type = LightType.Area;
-        hdLightData.SetAreaLightSize(new Vector2(config.screenWorldSize, config.screenWorldSize));
+        areaLight.type = LightType.Rectangle;
+        areaLight.areaSize = new Vector2(config.screenWorldSize, config.screenWorldSize);
 
-        // ─── 강도 ───
-        hdLightData.lightUnit = LightUnit.Lumen;
-        hdLightData.intensity = config.lightIntensity;
+        // ─── 강도 (Unity 6: Light 컴포넌트에서 직접 설정) ───
+        areaLight.lightUnit = UnityEngine.Rendering.LightUnit.Lumen;
+        areaLight.intensity = config.lightIntensity;
         smoothedIntensity = config.lightIntensity;
         targetIntensity = config.lightIntensity;
 
@@ -226,7 +226,7 @@ public class ScreenLightController : MonoBehaviour
 
         // 메인 광원이 활성일 때만 강도 적용
         if (mainLightActive)
-            hdLightData.intensity = smoothedIntensity;
+            areaLight.intensity = smoothedIntensity;
     }
 
     // ═══════════════════════════════════════════════════
@@ -240,13 +240,13 @@ public class ScreenLightController : MonoBehaviour
     {
         if (config == null || hdLightData == null) return;
 
-        hdLightData.SetAreaLightSize(new Vector2(config.screenWorldSize, config.screenWorldSize));
+        areaLight.areaSize = new Vector2(config.screenWorldSize, config.screenWorldSize);
         areaLight.range = config.lightRange;
 
         // 자동 노출 비활성 시 기본 강도로 복원
         if (!config.autoExposureEnabled)
         {
-            hdLightData.intensity = config.lightIntensity;
+            areaLight.intensity = config.lightIntensity;
             smoothedIntensity = config.lightIntensity;
             targetIntensity = config.lightIntensity;
         }
@@ -260,9 +260,9 @@ public class ScreenLightController : MonoBehaviour
     /// </summary>
     public void SetIntensity(float lumens)
     {
-        if (hdLightData != null)
+        if (areaLight != null)
         {
-            hdLightData.intensity = lumens;
+            areaLight.intensity = lumens;
             smoothedIntensity = lumens;
         }
     }
